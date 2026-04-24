@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>vLLM Traffic Generator — Results Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f5f5f3;
+      --bg-tertiary: #efefed;
+      --text-primary: #1a1a18;
+      --text-secondary: #5f5e5a;
+      --text-tertiary: #88877f;
+      --border: rgba(0,0,0,0.12);
+      --border-med: rgba(0,0,0,0.2);
+      --accent: #378ADD;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1c1a;
+        --bg-secondary: #252523;
+        --bg-tertiary: #2e2e2c;
+        --text-primary: #f0efe8;
+        --text-secondary: #a09f98;
+        --text-tertiary: #6a6a64;
+        --border: rgba(255,255,255,0.1);
+        --border-med: rgba(255,255,255,0.2);
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header {
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .card {
+      background: var(--bg);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .drop-zone {
+      border: 1.5px dashed var(--border-med);
+      border-radius: var(--radius-lg);
+      padding: 2.5rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.15s;
+      background: var(--bg);
+      margin-bottom: 1rem;
+    }
+
+    .drop-zone:hover, .drop-zone.over { background: var(--bg-secondary); }
+    .drop-zone input { display: none; }
+
+    .drop-zone h2 {
+      font-size: 15px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    .drop-zone p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 1rem;
+    }
+
+    .drop-zone button {
+      font-size: 13px;
+      padding: 7px 18px;
+      border-radius: var(--radius-md);
+      border: 0.5px solid var(--border-med);
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+    }
+
+    .drop-zone button:hover { background: var(--bg-secondary); }
+
+    .pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem; }
+
+    .file-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      background: var(--bg-secondary);
+      border-radius: 99px;
+      padding: 4px 12px;
+      color: var(--text-secondary);
+      border: 0.5px solid var(--border);
+    }
+
+    .file-pill .rm {
+      cursor: pointer;
+      color: var(--text-tertiary);
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1rem; }
+
+    .tab {
+      font-size: 12px;
+      padding: 5px 14px;
+      border-radius: 99px;
+      border: 0.5px solid var(--border-med);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+
+    .tab.active {
+      background: #E6F1FB;
+      color: #185FA5;
+      border-color: transparent;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .tab.active { background: #0C447C; color: #B5D4F4; }
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px;
+      margin-bottom: 1.5rem;
+    }
+
+    .metric {
+      background: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      padding: 0.85rem 1rem;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-size: 22px;
+      font-weight: 500;
+      line-height: 1.1;
+    }
+
+    .metric-sub {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 1.5rem 0 0.75rem;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      display: inline-block;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>vLLM traffic generator — results dashboard</h1>
+    <p>Load JSON output files from vllm_traffic_gen.py to visualize scenario performance</p>
+  </header>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".json" multiple>
+    <h2>Drop results JSON files here</h2>
+    <p>parasail_steady.json &middot; parasail_burst.json &middot; parasail_ramp.json &middot; parasail_wave.json</p>
+    <button onclick="document.getElementById('fileInput').click()">Choose files</button>
+  </div>
+
+  <div class="pill-row" id="pillRow"></div>
+
+  <div id="dashboard" style="display:none;">
+    <div class="card">
+      <div class="tabs" id="tabs"></div>
+      <div class="metric-grid" id="metricGrid"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-label">throughput over time — completed requests per 10s window</div>
+      <div class="legend" id="legend1"></div>
+      <div class="chart-wrap" style="height:220px;">
+        <canvas id="chart1" role="img" aria-label="Request throughput per 10-second window by scenario"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-label">latency percentiles — TTFT and end-to-end (ms)</div>
+      <div class="legend" id="legend2"></div>
+      <div class="chart-wrap" style="height:260px;">
+        <canvas id="chart2" role="img" aria-label="TTFT and E2E latency percentile comparison across scenarios"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-label">time to first token — mean / median / p95 / p99 (ms)</div>
+      <div class="legend" id="legend3"></div>
+      <div class="chart-wrap" style="height:220px;">
+        <canvas id="chart3" role="img" aria-label="TTFT distribution across scenarios"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const COLORS = ['#378ADD','#1D9E75','#D85A30','#BA7517','#D4537E','#639922'];
+    const COLORS_LIGHT = ['#B5D4F4','#9FE1CB','#F5C4B3','#FAC775','#F4C0D1','#C0DD97'];
+    const scenarios = {};
+    let activeScenario = null;
+    let chart1, chart2, chart3;
+
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+    dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('over'); handleFiles(e.dataTransfer.files); });
+    fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+    function handleFiles(files) {
+      Array.from(files).forEach(f => {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          try {
+            const data = JSON.parse(ev.target.result);
+            const name = f.name.replace('.json','').replace('parasail_','').replace(/_/g,' ');
+            scenarios[name] = data;
+            if (!activeScenario) activeScenario = name;
+            render();
+          } catch(e) { alert('Could not parse ' + f.name); }
+        };
+        reader.readAsText(f);
+      });
+    }
+
+    function render() {
+      const names = Object.keys(scenarios);
+      if (!names.length) return;
+
+      document.getElementById('dashboard').style.display = 'block';
+
+      document.getElementById('pillRow').innerHTML = names.map(n =>
+        `<span class="file-pill">${n}<span class="rm" onclick="removeScenario('${n}')">&times;</span></span>`
+      ).join('');
+
+      document.getElementById('tabs').innerHTML = names.map(n =>
+        `<button class="tab ${n===activeScenario?'active':''}" onclick="setActive('${n}')">${n}</button>`
+      ).join('');
+
+      renderMetrics();
+      renderCharts();
+    }
+
+    function setActive(name) { activeScenario = name; render(); }
+
+    function removeScenario(name) {
+      delete scenarios[name];
+      if (activeScenario === name) activeScenario = Object.keys(scenarios)[0] || null;
+      if (!Object.keys(scenarios).length) {
+        document.getElementById('dashboard').style.display = 'none';
+        document.getElementById('pillRow').innerHTML = '';
+      } else { render(); }
+    }
+
+    function renderMetrics() {
+      const d = scenarios[activeScenario];
+      if (!d) return;
+      const s = d.summary || {};
+      const ttft = s.ttft_ms || {};
+      const e2e = s.e2e_latency_ms || {};
+      const tokPerSec = s.total_tokens_generated && d.elapsed_s
+        ? Math.round(s.total_tokens_generated / d.elapsed_s) : '—';
+      document.getElementById('metricGrid').innerHTML = [
+        { label: 'throughput',  value: (s.throughput_req_s||0).toFixed(2), sub: 'req / s' },
+        { label: 'tok / s',     value: tokPerSec,                           sub: 'output tokens' },
+        { label: 'TTFT p50',    value: Math.round(ttft.median||0),          sub: 'ms' },
+        { label: 'TTFT p95',    value: Math.round(ttft.p95||0),             sub: 'ms' },
+        { label: 'TTFT p99',    value: Math.round(ttft.p99||0),             sub: 'ms' },
+        { label: 'E2E p50',     value: Math.round(e2e.median||0),           sub: 'ms' },
+        { label: 'E2E p95',     value: Math.round(e2e.p95||0),              sub: 'ms' },
+        { label: 'errors',      value: s.errors||0,                         sub: `of ${s.total_requests||0} reqs` },
+      ].map(m => `<div class="metric">
+        <div class="metric-label">${m.label}</div>
+        <div class="metric-value">${m.value}</div>
+        <div class="metric-sub">${m.sub}</div>
+      </div>`).join('');
+    }
+
+    function renderCharts() {
+      const names = Object.keys(scenarios);
+
+      if (chart1) chart1.destroy();
+      if (chart2) chart2.destroy();
+      if (chart3) chart3.destroy();
+
+      document.getElementById('legend1').innerHTML = names.map((n,i) =>
+        `<span><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span>${n}</span>`
+      ).join('');
+
+      document.getElementById('legend2').innerHTML = ['TTFT mean','TTFT p95','E2E mean','E2E p95'].map((l,i) =>
+        `<span><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span>${l}</span>`
+      ).join('');
+
+      document.getElementById('legend3').innerHTML = names.map((n,i) =>
+        `<span><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span>${n}</span>`
+      ).join('');
+
+      const windowLabels = ['10s','20s','30s','40s','50s','60s'];
+      const datasets1 = names.map((n,i) => {
+        const reqs = scenarios[n].requests || [];
+        const windows = windowLabels.map((_, wi) => {
+          const lo = wi * 10000, hi = (wi+1) * 10000;
+          return reqs.filter(r => r.status==='ok' && r.total_ms >= lo && r.total_ms < hi).length;
+        });
+        return {
+          label: n, data: windows,
+          borderColor: COLORS[i%COLORS.length],
+          backgroundColor: COLORS_LIGHT[i%COLORS_LIGHT.length],
+          borderWidth: 2, pointRadius: 3, fill: false, tension: 0.3
+        };
+      });
+
+      chart1 = new Chart(document.getElementById('chart1'), {
+        type: 'line',
+        data: { labels: windowLabels, datasets: datasets1 },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, title: { display: true, text: 'completed requests', font: { size: 11 } } } }
+        }
+      });
+
+      const barLabels = names;
+      chart2 = new Chart(document.getElementById('chart2'), {
+        type: 'bar',
+        data: {
+          labels: barLabels,
+          datasets: [
+            { label: 'TTFT mean', data: names.map(n => Math.round(scenarios[n].summary?.ttft_ms?.mean||0)), backgroundColor: COLORS[0] },
+            { label: 'TTFT p95',  data: names.map(n => Math.round(scenarios[n].summary?.ttft_ms?.p95||0)),  backgroundColor: COLORS_LIGHT[0] },
+            { label: 'E2E mean',  data: names.map(n => Math.round(scenarios[n].summary?.e2e_latency_ms?.mean||0)), backgroundColor: COLORS[1] },
+            { label: 'E2E p95',   data: names.map(n => Math.round(scenarios[n].summary?.e2e_latency_ms?.p95||0)),  backgroundColor: COLORS_LIGHT[1] },
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { title: { display: true, text: 'ms', font: { size: 11 } } }, x: { ticks: { autoSkip: false } } }
+        }
+      });
+
+      chart3 = new Chart(document.getElementById('chart3'), {
+        type: 'bar',
+        data: {
+          labels: ['mean','median','p95','p99'],
+          datasets: names.map((n,i) => ({
+            label: n,
+            data: ['mean','median','p95','p99'].map(m => Math.round(scenarios[n].summary?.ttft_ms?.[m]||0)),
+            backgroundColor: COLORS[i%COLORS.length],
+          }))
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { title: { display: true, text: 'ms', font: { size: 11 } } }, x: { ticks: { autoSkip: false } } }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
